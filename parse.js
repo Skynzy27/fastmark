@@ -190,7 +190,7 @@ const reHtml = compose('^ {0,3}(?:<(script|pre|style|textarea)[\\s>][\\s\\S]*?(?
 const LHEADING_TMPL = '^(?!bull |blockCode|fences|blockquote|heading|hr|html|table)((?:.|\\n(?!\\s*?\\n|bull |fences|blockquote|heading|hr|html|table))+?)\\n {0,3}(=+|-+)[ \\t]*(?:\\n+|$)';
 function buildLheading() {
   return compose(LHEADING_TMPL, [
-    [/bull /g, LIST_BULLET_SRC],
+    [/bull/g, LIST_BULLET_SRC],
     [/blockCode/g, '(?: {4}| {0,3}\\t)'],
     [/fences/g, ' {0,3}(?:`{3,}|~{3,})'],
     [/blockquote/g, BLOCKQUOTE_SRC],
@@ -695,6 +695,11 @@ function blockTokens(src, out, ctx, inQuote) {
 const PUNCT_SRC = '[\\p{P}\\p{S}]';
 const PUNCT_SPACE_SRC = '[\\s\\p{P}\\p{S}]';
 const NOT_PUNCT_SPACE_SRC = '[^\\s\\p{P}\\p{S}]';
+// GFM emphasis classes (marked's ht/lt): '~' is NOT punctuation — it counts as
+// a word character for emphasis flanking, so '~~' does not end a closer run.
+const PUNCT_GFM_SRC = '(?!~)[\\p{P}\\p{S}]';
+const PUNCT_SPACE_GFM_SRC = '(?!~)[\\s\\p{P}\\p{S}]';
+const NOT_PUNCT_SPACE_GFM_SRC = '(?:[^\\s\\p{P}\\p{S}]|~)';
 const PROTOCOL_SRC = '[hH][tT][tT][pP][sS]?|[fF][tT][pP]';
 const EMAIL_SRC = '[A-Za-z0-9._+-]+@[a-zA-Z0-9-_]+(?:\\.[a-zA-Z0-9-_]*[a-zA-Z0-9])+(?![\\w-])';
 const EMAIL_PROTO_SRC = '(?:mailto:' + EMAIL_SRC + '|xmpp:' + EMAIL_SRC + '(?:\\/[A-Za-z0-9@.]+)?)';
@@ -726,15 +731,17 @@ const reInlineNolink = compose('^!?\\[(ref)\\](?:\\[\\])?', [['ref', REF_SRC]]);
 // Emphasis delimiters. The left delimiter is a run of * or _ plus one following
 // char (punctuation or any non-space); the right delimiter is a pattern that
 // walks the text and reports each candidate closer run with its flanking.
-const reEmLDelim = compose('^(?:\\*+(?:((?!\\*)punct)|([^\\s*]))?)|^_+(?:((?!_)punct)|([^\\s_]))?', [
-  [/punct/g, PUNCT_SRC],
+// GFM (the default) uses the '~'-excluding punct classes for the *-delimiters
+// and the ft template for the _-delimiters; the normal classes stay for del.
+const reEmLDelim = compose('^(?:\\*+(?:((?!\\*)(?!openQuote)punct)|([^\\s*]))?)|^_+(?:((?!_)(?!openQuote)punct)|([^\\s_]))?', [
+  [/punct/g, PUNCT_GFM_SRC],
 ], 'u');
 const EM_R_AST_SRC = '^[^_*]*?__[^_*]*?\\*[^_*]*?(?=__)|[^*]+(?=[^*])|(?!\\*)punct(\\*+)(?=[\\s]|$)|notPunctSpace(\\*+)(?!\\*)(?=punctSpace|$)|(?!\\*)punctSpace(\\*+)(?=notPunctSpace)|[\\s](\\*+)(?!\\*)(?=punct)|(?!\\*)punct(\\*+)(?!\\*)(?=punct)|notPunctSpace(\\*+)(?=notPunctSpace)';
 const EM_R_UND_SRC = '^[^_*]*?\\*\\*[^_*]*?_[^_*]*?(?=\\*\\*)|[^_]+(?=[^_])|(?!_)punct(_+)(?=[\\s]|$)|notPunctSpace(_+)(?!_)(?=punctSpace|$)|(?!_)punctSpace(_+)(?=notPunctSpace)|[\\s](_+)(?!_)(?=punct)|(?!_)punct(_+)(?!_)(?=punct)';
 const reEmRDelimAst = compose(EM_R_AST_SRC, [
-  [/notPunctSpace/g, NOT_PUNCT_SPACE_SRC],
-  [/punctSpace/g, PUNCT_SPACE_SRC],
-  [/punct/g, PUNCT_SRC],
+  [/notPunctSpace/g, NOT_PUNCT_SPACE_GFM_SRC],
+  [/punctSpace/g, PUNCT_SPACE_GFM_SRC],
+  [/punct/g, PUNCT_GFM_SRC],
 ], 'gu');
 const reEmRDelimUnd = compose(EM_R_UND_SRC, [
   [/notPunctSpace/g, NOT_PUNCT_SPACE_SRC],
@@ -775,7 +782,7 @@ const reAnyPunctOutsideCode = compose('(`+)(?:[^`]|[^`][\\s\\S]*?[^`])\\1(?!`)|`
   [/punct/g, PUNCT_SRC],
 ], 'gu');
 const reBlockSkip = compose('link|(?<!`)()(code)|html', [
-  ['link', '\\[(?:[^\\[\\]`]|(?<a>`+)[^`]+\\k<a>(?!`))*?\\]\\((?:\\\\[\\s\\S]|[^\\)]|\\((?:\\\\[\\s\\S]|[^\\)])*\\))*\\)'],
+  ['link', '\\[(?:[^\\[\\]`]|(?<a>`+)[^`]+\\k<a>(?!`))*?\\]\\((?:\\\\[\\s\\S]|[^\\)\\(]|\\((?:\\\\[\\s\\S]|[^\\)\\(])*\\))*\\)'],
   ['code', '(?<b>`+)[^`]+\\k<b>(?!`)'],
   ['html', '<(?! )[^<>]*?>'],
 ], 'g');
